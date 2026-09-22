@@ -93,17 +93,23 @@ worth shipping even in the worst case.
 
 ### 4.1 Control ports
 
-Seven controls, shared by every voice; a voice is a set of values for them.
+Eight controls, shared by every voice; a voice is a set of values for them.
 
 | Port | Range | Meaning |
 |---|---|---|
 | `pitch` | -12..+12 semitones | Rubber Band pitch scale. 0 bypasses the shifter. |
 | `formant` | -12..+12 semitones | Formant scale, independent of pitch. 0 with `pitch != 0` means formants preserved. |
-| `tilt` | -1..+1 | Spectral tilt / band emphasis through the biquad bank. |
+| `band` | 0..1 | Telephone bandpass 300–3400 Hz, dry..full. |
+| `tilt` | -1..+1 | Negative = chesty low shelf; positive = nasal 2.2 kHz peak. |
 | `grit` | 0..1 | Waveshaper drive. |
 | `ring` | 0..200 Hz | Ring-modulator frequency. 0 disables. |
 | `noise` | 0..1 | Added static, gated by input level. |
 | `mix` | 0..1 | Dry/wet. `panic` sets this to 0. |
+
+**Amended 2026-09-22 during implementation:** this table originally listed
+seven controls. `band` was added as an eighth because Whisperkill and Handset
+need a genuine telephone bandpass that `tilt` cannot express without
+overloading it with magic value ranges. Eight is authoritative.
 
 `strength` in the CLI scales a voice's `pitch`, `formant`, `grit`, `ring` and
 `noise` toward their dry values; it does not alter `mix`.
