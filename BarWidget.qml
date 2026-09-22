@@ -35,6 +35,7 @@ BarWidget {
     id: voicesFile
     path: Quickshell.env("HOME") + "/.config/omarchy/plugins/tiertek.tekvoice/voices.json"
     watchChanges: true
+    printErrors: false
     onFileChanged: reload()
     onLoaded: {
       try {
@@ -87,6 +88,7 @@ BarWidget {
   function panic()          { root.run(["panic"]) }
   function next()           { root.run(["next"]) }
   function prev()           { root.run(["prev"]) }
+  function cycleVoice(dir)  { if (dir < 0) root.prev(); else root.next() }
 
   // Arming and choosing in one gesture: clicking a voice while disarmed should
   // just work rather than making the user find the arm switch first.
@@ -142,28 +144,31 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
 
-    // U+F130 Nerd Font "microphone" when live, U+F131 "microphone-slash"
-    // when your real voice is going out. The glyph alone answers the only
-    // question that matters in a hurry: am I disguised right now?
-    icon: root.live ? "" : ""
+    // U+F130 Nerd Font "microphone", U+F131 "microphone-slash". The glyph
+    // alone answers the only question that matters in a hurry: am I disguised
+    // right now? Verify any replacement by actually rendering it — a sibling
+    // plugin shipped a glyph that turned out to be a weather icon.
+    text: root.live ? "\uF130 " + root.voiceName : "\uF131"
 
-    // Tinted with the active voice's own colour while live, so a glance
-    // distinguishes Quackers from Deep Six without opening anything.
-    colorOverride: root.live ? root.voiceColor : ""
+    active: root.live
+    dimmed: !root.armed
 
-    // Dimmed, not hidden, when disarmed. A control surface that vanishes when
-    // idle reads as a broken install.
-    opacity: root.live ? 1.0 : 0.55
+    tooltipText: {
+      if (!root.armed) return "TekVoice off"
+      if (!root.live) return "TekVoice armed \u00b7 your real voice is passing through"
+      var t = "TekVoice \u00b7 " + root.voiceName
+      if (root.status.consumers > 0)
+        t += " \u00b7 " + root.status.consumers + " app(s) listening"
+      return t
+    }
 
-    tooltipText: root.live
-      ? ("TekVoice: " + root.voiceName + (root.status.consumers > 0
-          ? " — " + root.status.consumers + " app(s) listening" : ""))
-      : (root.armed ? "TekVoice armed — your real voice is passing through"
-                    : "TekVoice off")
-
-    onClicked: root.toggle()
-    // Middle click is panic. It is the one action worth being able to hit
-    // without aiming, and it works whether or not the panel is open.
-    onMiddleClicked: root.panic()
+    onPressed: function(mouseButton) {
+      // Middle is panic. It is the one action worth being able to hit without
+      // aiming, and it works whether or not the panel is open.
+      if (mouseButton === Qt.MiddleButton) root.panic()
+      else if (mouseButton === Qt.RightButton) root.next()
+      else root.toggle()
+    }
+    onWheelMoved: function(delta) { root.cycleVoice(delta > 0 ? -1 : 1) }
   }
 }

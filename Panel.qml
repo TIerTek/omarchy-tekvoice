@@ -1,181 +1,286 @@
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import qs.Ui
 import qs.Commons
 import "VoiceModel.js" as VoiceModel
 
-// The voice picker. A grid of tiles, a strength slider, an arm switch and a
-// panic button.
+// The voice picker.
 //
-// The panel is a view: it holds no state of its own beyond what is open. Every
+// The panel is a view: it holds no state beyond the keyboard cursor. Every
 // action is delegated to the host widget, which delegates to the CLI, so the
-// panel and the hotkeys can never disagree about what is on air.
-WidgetPanel {
-  id: panel
+// panel, the bar glyph and the hotkeys can never disagree about what is on air.
+Panel {
+  id: root
+  moduleName: "tiertek.tekvoice"
+  // The bar widget owns the IPC target: it is mounted for the whole session,
+  // while this panel is created lazily and must not race it for the name.
+  manageIpc: false
 
+  property var anchorItem: null
   property var hostWidget: null
+
+  readonly property var barIdentity: hostWidget || root
   readonly property var voices: hostWidget ? hostWidget.voices : []
   readonly property string activeId: hostWidget ? hostWidget.voiceId : ""
   readonly property bool armed: hostWidget ? hostWidget.armed : false
   readonly property bool live: hostWidget ? hostWidget.live : false
+  readonly property int strength: hostWidget ? hostWidget.status.strength : 100
+  readonly property string family: bar ? bar.fontFamily : Style.font.family
 
-  contentItem: ColumnLayout {
-    spacing: Style.marginM
+  readonly property int columns: 3
+  readonly property int cellWidth: Style.space(150)
+  readonly property int cellHeight: Style.space(64)
 
-    // ------------------------------------------------------------ header
+  // ---------------------------------------------------------------- cursor
 
-    RowLayout {
-      Layout.fillWidth: true
-      spacing: Style.marginS
+  property bool cursorActive: false
+  property int cursorIndex: 0
 
-      StyledText {
-        text: "TekVoice"
-        font.pointSize: Style.fontSizeL
-        font.bold: true
-        Layout.fillWidth: true
+  function moveCursor(delta) {
+    if (root.voices.length === 0) return
+    var next = root.cursorIndex + delta
+    root.cursorIndex = next < 0 ? 0
+      : next > root.voices.length - 1 ? root.voices.length - 1 : next
+  }
+
+  function activateCursor() {
+    if (root.voices.length === 0) return
+    root.pick(root.voices[root.cursorIndex])
+  }
+
+  function pick(voice) {
+    if (!voice || !root.hostWidget) return
+    root.hostWidget.pick(voice.id)
+    root.close()
+  }
+
+  // Typing 1-9 picks a voice outright, which is faster than arrowing to it.
+  function activateNumber(t) {
+    var n = parseInt(t, 10)
+    if (isNaN(n) || n < 1 || n > root.voices.length) return
+    root.pick(root.voices[n - 1])
+  }
+
+  onOpenedChanged: {
+    if (!root.opened) { root.cursorActive = false; return }
+    var index = 0
+    for (var i = 0; i < root.voices.length; i++)
+      if (root.voices[i].id === root.activeId) { index = i; break }
+    root.cursorIndex = index
+  }
+
+  KeyboardPanel {
+    id: panel
+    anchorItem: root.anchorItem
+    owner: root.barIdentity
+    bar: root.bar
+    open: root.opened
+    focusTarget: keys
+    contentWidth: panel.fittedContentWidth(
+      root.columns * (root.cellWidth + Style.space(8)) + Style.space(8))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+
+    PanelKeyCatcher {
+      id: keys
+      anchors.fill: parent
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onMoveRequested: function(dx, dy) {
+        if (!root.cursorActive) { root.cursorActive = true; return }
+        if (dx !== 0) root.moveCursor(dx)
+        else if (dy !== 0) root.moveCursor(dy * root.columns)
       }
+      onActivateRequested: root.activateCursor()
+      onReturnRequested: root.activateCursor()
+      onTextKey: function(t) { root.activateNumber(t) }
 
-      // States the truth plainly rather than making the user infer it from a
-      // toggle position: "armed" and "actually disguised" are different things.
-      StyledText {
-        text: panel.live ? "on air"
-                         : (panel.armed ? "real voice" : "off")
-        color: panel.live ? Style.accent : Style.textMuted
-        font.pointSize: Style.fontSizeS
-      }
-    }
+      Column {
+        id: column
+        anchors.fill: parent
+        spacing: Style.space(10)
 
-    StyledText {
-      Layout.fillWidth: true
-      wrapMode: Text.WordWrap
-      font.pointSize: Style.fontSizeS
-      color: Style.textMuted
-      text: panel.armed
-        ? "Select “TekVoice” as your microphone in Zoom, Discord, Meet or OBS."
-        : "Arm TekVoice to add a “TekVoice” microphone your apps can select."
-    }
+        // States the truth plainly rather than making the user infer it from a
+        // toggle position: "armed" and "actually disguised" are different.
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.live ? "On air · " + VoiceModel.describe(root.voices, root.activeId)
+              : (root.armed ? "Armed · your real voice is going out"
+                            : "TekVoice is off")
+          color: root.live ? Color.accent : Color.foreground
+          opacity: root.live ? 1.0 : 0.6
+          font.family: root.family
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+        }
 
-    // ------------------------------------------------------------ voices
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.armed
+            ? "Pick “TekVoice” as your microphone in Zoom, Discord, Meet or OBS. Press 1–9."
+            : "Choose a voice to arm TekVoice and add its microphone."
+          color: Color.foreground
+          opacity: 0.45
+          font.family: root.family
+          font.pixelSize: Style.font.bodySmall
+          wrapMode: Text.Wrap
+        }
 
-    GridLayout {
-      Layout.fillWidth: true
-      columns: 3
-      rowSpacing: Style.marginS
-      columnSpacing: Style.marginS
+        Grid {
+          columns: root.columns
+          spacing: Style.space(8)
 
-      Repeater {
-        model: panel.voices
+          Repeater {
+            model: root.voices
 
-        delegate: Rectangle {
-          required property var modelData
+            delegate: Rectangle {
+              required property var modelData
+              required property int index
 
-          Layout.fillWidth: true
-          Layout.preferredHeight: 74
-          radius: Style.radiusS
+              width: root.cellWidth
+              height: root.cellHeight
+              radius: Style.space(6)
 
-          readonly property bool active: panel.live && modelData.id === panel.activeId
+              readonly property bool isActive: root.live && modelData.id === root.activeId
+              readonly property bool isCursor: root.cursorActive && index === root.cursorIndex
 
-          color: active ? Qt.alpha(modelData.color, 0.22) : Style.surfaceAlt
-          border.width: active ? 2 : 1
-          border.color: active ? modelData.color : Style.border
+              color: isActive ? Qt.rgba(Qt.color(modelData.color).r,
+                                        Qt.color(modelData.color).g,
+                                        Qt.color(modelData.color).b, 0.20)
+                              : Qt.rgba(Color.foreground.r, Color.foreground.g,
+                                        Color.foreground.b, 0.06)
+              border.width: isActive || isCursor ? 2 : 1
+              border.color: isActive ? modelData.color
+                          : isCursor ? Color.accent
+                          : Qt.rgba(Color.foreground.r, Color.foreground.g,
+                                    Color.foreground.b, 0.12)
 
-          ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Style.marginS
-            spacing: 2
+              Column {
+                anchors.fill: parent
+                anchors.margins: Style.space(8)
+                spacing: Style.space(2)
 
-            StyledText {
-              text: modelData.icon
-              font.pointSize: Style.fontSizeL
+                Text {
+                  textFormat: Text.PlainText
+                  text: modelData.icon + "  " + (index + 1)
+                  color: Color.foreground
+                  opacity: 0.8
+                  font.family: root.family
+                  font.pixelSize: Style.font.body
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: modelData.name
+                  color: Color.foreground
+                  font.family: root.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                  elide: Text.ElideRight
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: modelData.blurb
+                  color: Color.foreground
+                  opacity: 0.45
+                  font.family: root.family
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                onClicked: root.pick(modelData)
+              }
             }
-            StyledText {
-              text: modelData.name
-              font.bold: true
-              font.pointSize: Style.fontSizeS
-              Layout.fillWidth: true
-              elide: Text.ElideRight
+          }
+        }
+
+        PanelSeparator { width: parent.width }
+
+        // Strength pulls every voice back toward the user's real voice.
+        Row {
+          width: parent.width
+          spacing: Style.space(8)
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Strength"
+            color: Color.foreground
+            opacity: 0.6
+            font.family: root.family
+            font.pixelSize: Style.font.bodySmall
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          PanelSlider {
+            id: strengthSlider
+            bar: root.bar
+            width: parent.width - Style.space(110)
+            anchors.verticalCenter: parent.verticalCenter
+            minimum: 0
+            maximum: 100
+            step: 5
+            integer: true
+            value: root.strength
+            // Applied on release, not on every drag tick: each change is a
+            // PipeWire write, and dragging would otherwise fire dozens.
+            onDraggingChanged: {
+              if (!dragging && root.hostWidget)
+                root.hostWidget.strength(Math.round(strengthSlider.liveValue))
             }
           }
 
-          MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: if (panel.hostWidget) panel.hostWidget.pick(modelData.id)
-            ToolTip.visible: containsMouse
-            ToolTip.text: modelData.blurb
-            ToolTip.delay: 400
+          Text {
+            textFormat: Text.PlainText
+            text: Math.round(strengthSlider.liveValue) + "%"
+            color: Color.foreground
+            opacity: 0.6
+            font.family: root.family
+            font.pixelSize: Style.font.bodySmall
+            anchors.verticalCenter: parent.verticalCenter
           }
         }
-      }
-    }
 
-    // ------------------------------------------------------------ strength
+        Row {
+          width: parent.width
+          spacing: Style.space(8)
 
-    RowLayout {
-      Layout.fillWidth: true
-      spacing: Style.marginS
+          Button {
+            text: root.armed ? "Disarm" : "Arm"
+            bordered: true
+            onClicked: {
+              if (!root.hostWidget) return
+              if (root.armed) root.hostWidget.disarm()
+              else root.hostWidget.arm()
+            }
+          }
 
-      StyledText {
-        text: "Strength"
-        font.pointSize: Style.fontSizeS
-        color: Style.textMuted
-      }
+          // Panic never unloads the device — it sets the wet mix to zero, so
+          // the far end hears your real voice within a buffer and their
+          // microphone never disappears mid-call.
+          Button {
+            text: "Panic"
+            bordered: true
+            active: root.live
+            onClicked: if (root.hostWidget) root.hostWidget.panic()
+          }
+        }
 
-      StyledSlider {
-        id: strengthSlider
-        Layout.fillWidth: true
-        from: 0
-        to: 100
-        stepSize: 5
-        value: panel.hostWidget ? panel.hostWidget.status.strength : 100
-        // Only on release: each change is a PipeWire write, and dragging would
-        // otherwise fire dozens of them.
-        onPressedChanged: if (!pressed && panel.hostWidget)
-          panel.hostWidget.strength(Math.round(value))
-      }
-
-      StyledText {
-        text: Math.round(strengthSlider.value) + "%"
-        font.pointSize: Style.fontSizeS
-        color: Style.textMuted
-      }
-    }
-
-    // ------------------------------------------------------------ actions
-
-    RowLayout {
-      Layout.fillWidth: true
-      spacing: Style.marginS
-
-      StyledButton {
-        text: panel.armed ? "Disarm" : "Arm"
-        Layout.fillWidth: true
-        onClicked: {
-          if (!panel.hostWidget) return
-          if (panel.armed) panel.hostWidget.disarm()
-          else panel.hostWidget.arm()
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: "Super+Alt+V panel · Super+Alt+Shift+V next · Super+Alt+X panic"
+          color: Color.foreground
+          opacity: 0.35
+          font.family: root.family
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
         }
       }
-
-      // Panic never unloads the device — it sets the wet mix to zero, so the
-      // far end hears your real voice within a buffer and their microphone
-      // never disappears mid-call.
-      StyledButton {
-        text: "Panic"
-        Layout.fillWidth: true
-        enabled: panel.live
-        highlighted: true
-        onClicked: if (panel.hostWidget) panel.hostWidget.panic()
-      }
-    }
-
-    StyledText {
-      Layout.fillWidth: true
-      wrapMode: Text.WordWrap
-      font.pointSize: Style.fontSizeS
-      color: Style.textMuted
-      text: "Super+Alt+V panel · Super+Alt+Shift+V next voice · Super+Alt+X panic"
     }
   }
 }
