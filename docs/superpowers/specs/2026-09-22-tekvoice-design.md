@@ -184,3 +184,61 @@ requested; the user chose publication without a listing.
 | `filter-chain` will not expose control ports as writable properties on this PipeWire build | Verify in phase 0 alongside latency; if unavailable the voice switch costs a node rebuild and the mic-stability promise must be renegotiated with the user. |
 | Engine crash kills a live call's microphone | No allocation and no unbounded reads in the audio path; `panic` is a mix change, not an unload; `disarm` refuses while consumers are attached. |
 | CPU cost on battery | Measured in phase 1; the three bypass voices are near-free. |
+
+## 11. Phase 0 results — measured 2026-09-22 on sarial
+
+All three gates cleared. This section supersedes the budget in §5.
+
+### 11.1 Latency
+
+Rubber Band `RubberBandLiveShifter`, 48 kHz mono, `OptionWindowShort`,
+impulse-response energy peak (the honest figure; the first non-zero output
+sample at 12.6 ms is window pre-ringing carrying negligible energy):
+
+| Condition | Added latency |
+|---|---|
+| No shift | 44.6 ms |
+| +7 semitones | 55.2 ms |
+| −5 semitones | 52.4 ms |
+| CPU | ~2% of one core |
+
+`getBlockSize()` = 512, `getStartDelay()` = 2142.
+
+**Decision (user, 2026-09-22): ship Rubber Band at ~55 ms.** The design has no
+local monitor, so the user never hears this delay; it lands only as added
+one-way delay for the remote party, on top of the call's existing ~120 ms. The
+PSOLA fallback in §5 is not being built. The three bypass voices remain at ~0 ms.
+
+### 11.2 Virtual microphone — confirmed working
+
+`pipewire -c filter-chain.conf` with a fragment in
+`<config-dir>/filter-chain.conf.d/`, launched with a private
+`PIPEWIRE_CONFIG_DIR` so the user's own PipeWire config is never modified.
+`tekvoice_src` appears in `pactl list short sources` as `float32le 1ch 48000Hz`
+and is selectable by applications.
+
+### 11.3 Live voice switching — confirmed working
+
+Filter control ports are exposed as writable node properties **on the capture
+node** (`tekvoice_in`), not the source node. A write of
+`pw-cli s <capture-id> Props '{ params = [ "lp:Freq" 3000.0 ] }'` changed the
+running filter from 800 to 3000 Hz while the **source node id stayed constant**
+across the write. The "mic never drops mid-call" promise therefore holds, and
+the §10 risk about control-port exposure is closed.
+
+### 11.4 LANDMINE — `Audio/Source/Virtual` segfaults PipeWire 1.6.8
+
+Setting `playback.props.media.class = "Audio/Source/Virtual"` on a filter-chain
+makes `pipewire` **dump core** on this build, reliably, regardless of channel
+count or whether graph ports are named explicitly. Stack trace is inside
+`libspa-audioconvert.so` via `libpipewire-module-client-node.so`.
+
+- **Use `media.class = "Audio/Source"`.** It works and produces a source
+  applications can select.
+- `Audio/Sink` playback classes are unaffected; PipeWire's own shipped
+  `sink-eq6.conf` runs fine, which is how the fault was isolated to the class.
+- Worth reporting upstream; not a blocker.
+
+Bisect results: `Audio/Sink`+stereo OK, `Audio/Sink`+mono OK,
+`Audio/Source`+mono OK, `Audio/Source`+`Audio/Sink` capture OK,
+`Audio/Source/Virtual` crashes in every combination tried.
