@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "voices": [
+    { "id": "chipper", "name": "Chipper",
+      "blurb": "Small, fast and far too pleased with itself.",
+      "icon": "🐿", "color": "#f2c14e",
+      "pitch": 9, "formant": 9, "band": 0, "tilt": 0.2, "grit": 0, "ring": 0, "noise": 0 },
+
+    { "id": "quackers", "name": "Quackers",
+      "blurb": "Squashed, nasal and permanently outraged.",
+      "icon": "🦆", "color": "#f28f3b",
+      "pitch": 7, "formant": 12, "band": 0, "tilt": 0.55, "grit": 0.35, "ring": 0, "noise": 0 },
+
+    { "id": "deepsix", "name": "Deep Six",
+      "blurb": "Something enormous, speaking from the bottom of a well.",
+      "icon": "🗿", "color": "#7b2cbf",
+      "pitch": -7, "formant": -5, "band": 0, "tilt": -0.5, "grit": 0.3, "ring": 0, "noise": 0 },
+
+    { "id": "whisperkill", "name": "Whisperkill",
+      "blurb": "A gravelly stranger on a bad phone line. Do not answer.",
+      "icon": "🔪", "color": "#c1121f",
+      "pitch": -4, "formant": -2, "band": 0.85, "tilt": 0.15, "grit": 0.5, "ring": 0, "noise": 0.08 },
+
+    { "id": "ascend", "name": "Ascend",
+      "blurb": "Your own voice, lifted. Formants held, so it reads as a different person.",
+      "icon": "▲", "color": "#4cc9f0",
+      "pitch": 4, "formant": 0, "band": 0, "tilt": 0.1, "grit": 0, "ring": 0, "noise": 0 },
+
+    { "id": "descend", "name": "Descend",
+      "blurb": "Your own voice, lowered. Formants held, so it reads as a different person.",
+      "icon": "▼", "color": "#3a86ff",
+      "pitch": -4, "formant": 0, "band": 0, "tilt": -0.1, "grit": 0.05, "ring": 0, "noise": 0 },
+
+    { "id": "tinhead", "name": "Tinhead",
+      "blurb": "Clipped, metallic and entirely without warmth.",
+      "icon": "🤖", "color": "#8d99ae",
+      "pitch": 0, "formant": 0, "band": 0.3, "tilt": 0.2, "grit": 0.2, "ring": 55, "noise": 0 },
+
+    { "id": "toaster", "name": "Toaster",
+      "blurb": "Harsher machine flutter, one bad solder joint from failing.",
+      "icon": "⚙", "color": "#b5179e",
+      "pitch": 0, "formant": 0, "band": 0.4, "tilt": 0.3, "grit": 0.35, "ring": 110, "noise": 0 },
+
+    { "id": "handset", "name": "Handset",
+      "blurb": "Squeezed through a cheap radio, static and all.",
+      "icon": "📻", "color": "#2a9d8f",
+      "pitch": 0, "formant": 0, "band": 1.0, "tilt": 0.25, "grit": 0.45, "ring": 0, "noise": 0.15 }
+  ]
+}
