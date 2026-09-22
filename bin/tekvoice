@@ -1,0 +1,207 @@
+#!/bin/sh
+# TekVoice control CLI. SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Voice changes are a single property write on the running capture node, so the
+# TekVoice microphone is never torn down and never drops out of a live call.
+set -eu
+
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+STATE_DIR="${TEKVOICE_STATE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/tekvoice}"
+CONF_DIR="$STATE_DIR/pw"
+STATE="$STATE_DIR/state"
+PIDFILE="$STATE_DIR/pid"
+LOG="$STATE_DIR/log"
+VOICES="$HERE/voices.json"
+
+die() { echo "tekvoice: $*" >&2; exit 1; }
+
+resolve_so() {
+    for c in "${TEKVOICE_SO:-}" "$HOME/.ladspa/libtekvoice.so" "$HERE/build/libtekvoice.so"; do
+        [ -n "$c" ] && [ -f "$c" ] && { echo "$c"; return 0; }
+    done
+    die "libtekvoice.so not found - run make, or install.sh"
+}
+
+state_get() { [ -f "$STATE" ] && sed -n "s/^$1=//p" "$STATE" | tail -1 || true; }
+state_set() {
+    mkdir -p "$STATE_DIR"
+    touch "$STATE"
+    grep -v "^$1=" "$STATE" > "$STATE.tmp" 2>/dev/null || true
+    echo "$1=$2" >> "$STATE.tmp"
+    mv "$STATE.tmp" "$STATE"
+}
+
+running() {
+    [ -f "$PIDFILE" ] || return 1
+    kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+# Control ports live on the CAPTURE node, not the source node.
+capture_id() {
+    pw-dump 2>/dev/null | python3 -c '
+import sys, json
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(1)
+for o in d:
+    if o.get("type") != "PipeWire:Interface:Node": continue
+    if o.get("info", {}).get("props", {}).get("node.name") == "tekvoice_in":
+        print(o["id"]); break
+'
+}
+
+source_id() {
+    pw-dump 2>/dev/null | python3 -c '
+import sys, json
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(1)
+for o in d:
+    if o.get("type") != "PipeWire:Interface:Node": continue
+    if o.get("info", {}).get("props", {}).get("node.name") == "tekvoice_src":
+        print(o["id"]); break
+'
+}
+
+consumers() {
+    sid=$(source_id)
+    [ -n "$sid" ] || { echo 0; return; }
+    pw-dump 2>/dev/null | python3 -c '
+import sys, json
+sid = int(sys.argv[1])
+try: d = json.load(sys.stdin)
+except Exception: print(0); sys.exit(0)
+n = 0
+for o in d:
+    if o.get("type") != "PipeWire:Interface:Link": continue
+    if o.get("info", {}).get("output-node-id") == sid: n += 1
+print(n)
+' "$sid"
+}
+
+# Emit the eight control values for a voice, scaled by strength, as pw-cli params.
+voice_params() {
+    python3 - "$VOICES" "$1" "$2" <<'PY'
+import json, sys
+path, vid, strength = sys.argv[1], sys.argv[2], float(sys.argv[3]) / 100.0
+doc = json.load(open(path))
+v = next((x for x in doc["voices"] if x["id"] == vid), None)
+if v is None:
+    sys.exit(1)
+# Strength pulls the character back toward the user's real voice. Band and Tilt
+# are voicing/EQ, not character depth, so they scale too - all of it collapses
+# to a dry signal at strength 0.
+out = []
+for k, name in (("pitch","Pitch"),("formant","Formant"),("band","Band"),
+                ("tilt","Tilt"),("grit","Grit"),("ring","Ring"),("noise","Noise")):
+    out.append('"tv:%s" %s' % (name, float(v[k]) * strength))
+out.append('"tv:Mix" 1.0')
+print(" ".join(out))
+PY
+}
+
+apply_voice() {
+    vid="$1"
+    st="$(state_get strength)"; [ -n "$st" ] || st=100
+    params=$(voice_params "$vid" "$st") || die "unknown voice: $vid"
+    cid=$(capture_id)
+    [ -n "$cid" ] || die "TekVoice is not running"
+    # One write carries all eight values, so the voice changes atomically.
+    pw-cli s "$cid" Props "{ params = [ $params ] }" >/dev/null 2>&1 \
+        || die "failed to write controls to node $cid"
+}
+
+cmd_arm() {
+    if running; then echo "already armed"; return 0; fi
+    so=$(resolve_so)
+    mkdir -p "$CONF_DIR/filter-chain.conf.d"
+    cp /usr/share/pipewire/filter-chain.conf "$CONF_DIR/filter-chain.conf" \
+        || die "PipeWire's filter-chain.conf is missing - is pipewire installed?"
+    sed "s|@SO@|$so|" "$HERE/pipewire/tekvoice.conf.in" \
+        > "$CONF_DIR/filter-chain.conf.d/tekvoice.conf"
+
+    PIPEWIRE_CONFIG_DIR="$CONF_DIR" setsid pipewire -c filter-chain.conf \
+        >"$LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+
+    i=0
+    while [ $i -lt 30 ]; do
+        if pactl list short sources 2>/dev/null | grep -q tekvoice_src; then
+            state_set armed yes
+            [ -n "$(state_get strength)" ] || state_set strength 100
+            echo "armed - select \"TekVoice\" as your microphone"
+            return 0
+        fi
+        running || break
+        sleep 0.1
+        i=$((i + 1))
+    done
+    echo "tekvoice: failed to arm; log follows" >&2
+    tail -5 "$LOG" >&2 2>/dev/null || true
+    rm -f "$PIDFILE"
+    exit 1
+}
+
+cmd_disarm() {
+    force=${1:-}
+    running || { state_set armed no; echo "not armed"; return 0; }
+    n=$(consumers)
+    if [ "$n" -gt 0 ] && [ "$force" != "--force" ]; then
+        die "$n application(s) are using TekVoice; use 'panic' to return your real voice, or 'disarm --force'"
+    fi
+    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    state_set armed no
+    state_set mix 0
+    echo "disarmed"
+}
+
+cmd_set() {
+    [ $# -ge 1 ] || die "usage: tekvoice set <voice>"
+    running || die "not armed - run 'tekvoice arm' first"
+    apply_voice "$1"
+    state_set voice "$1"
+    state_set mix 1
+    echo "voice: $1"
+}
+
+cmd_strength() {
+    [ $# -ge 1 ] || die "usage: tekvoice strength <0-100>"
+    case "$1" in ''|*[!0-9]*) die "strength must be 0-100" ;; esac
+    [ "$1" -le 100 ] || die "strength must be 0-100"
+    state_set strength "$1"
+    v="$(state_get voice)"
+    if running && [ -n "$v" ] && [ "$(state_get mix)" = "1" ]; then apply_voice "$v"; fi
+    echo "strength: $1"
+}
+
+cmd_panic() {
+    running || { echo "not armed"; return 0; }
+    cid=$(capture_id)
+    [ -n "$cid" ] || die "TekVoice is not running"
+    pw-cli s "$cid" Props '{ params = [ "tv:Mix" 0.0 ] }' >/dev/null 2>&1 \
+        || die "failed to write controls to node $cid"
+    state_set mix 0
+    echo "panic - your real voice is back"
+}
+
+cmd_status() {
+    if running; then
+        echo "armed=yes"
+        echo "consumers=$(consumers)"
+    else
+        echo "armed=no"
+        echo "consumers=0"
+    fi
+    v="$(state_get voice)"; [ -n "$v" ] && echo "voice=$v" || true
+    s="$(state_get strength)"; [ -n "$s" ] || s=100; echo "strength=$s"
+    m="$(state_get mix)"; [ -n "$m" ] || m=0; echo "mix=$m"
+}
+
+case "${1:-}" in
+    arm)      shift; cmd_arm ;;
+    disarm)   shift; cmd_disarm "${1:-}" ;;
+    set)      shift; cmd_set "$@" ;;
+    strength) shift; cmd_strength "$@" ;;
+    panic)    shift; cmd_panic ;;
+    status)   shift; cmd_status ;;
+    *) echo "usage: tekvoice arm|disarm [--force]|set <voice>|strength <0-100>|panic|status" >&2; exit 1 ;;
+esac

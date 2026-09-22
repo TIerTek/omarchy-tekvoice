@@ -1,0 +1,25 @@
+# TekVoice filter-chain fragment. Generated at arm time; @SO@ is replaced with
+# the absolute path of libtekvoice.so.
+#
+# media.class MUST be Audio/Source. Audio/Source/Virtual segfaults PipeWire
+# 1.6.8 inside libspa-audioconvert (see docs/.../design.md section 11.4).
+context.modules = [
+  { name = libpipewire-module-filter-chain
+    args = {
+      audio.channels   = 1
+      audio.position   = [ MONO ]
+      node.description = "TekVoice"
+      media.name       = "TekVoice"
+      filter.graph = {
+        nodes = [
+          { name = tv type = ladspa plugin = "@SO@" label = tekvoice
+            control = { "Pitch" = 0.0 "Formant" = 0.0 "Band" = 0.0 "Tilt" = 0.0
+                        "Grit" = 0.0 "Ring" = 0.0 "Noise" = 0.0 "Mix" = 0.0 } }
+        ]
+      }
+      capture.props  = { node.name = "tekvoice_in"  media.class = "Stream/Input/Audio" }
+      playback.props = { node.name = "tekvoice_src" media.class = "Audio/Source"
+                         node.description = "TekVoice" }
+    }
+  }
+]
