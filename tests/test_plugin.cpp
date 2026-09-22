@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "../src/ladspa.h"
+#include "pitch.h"
 
 static const LADSPA_Descriptor *D = nullptr;
 
@@ -54,10 +55,69 @@ static void test_bypass_is_bit_exact() {
     printf("  ok bypass_is_bit_exact\n");
 }
 
+static void test_pitch_voice_shifts_fundamental() {
+    std::vector<float> in(96000);
+    for (size_t i = 0; i < in.size(); i++)
+        in[i] = 0.5f * sinf(2.f * (float)M_PI * 150.f * i / 48000.f);
+    auto out = run_voice(in, 7, 0, 0, 0, 0, 0, 0, 1.f);
+    float hz = estimate_hz(out);
+    float expect = 150.f * powf(2.f, 7.f / 12.f);
+    printf("    pitched to %.1f Hz (expected %.1f)\n", hz, expect);
+    assert(fabsf(hz - expect) / expect < 0.05f);
+    printf("  ok pitch_voice_shifts_fundamental\n");
+}
+
+static void test_zero_latency_voice_has_no_shifter_delay() {
+    std::vector<float> in(8192, 0.f); in[0] = 1.f;
+    auto out = run_voice(in, 0, 0, 0, 0, 0, 55.f, 0, 1.f);
+    int first = -1;
+    for (size_t i = 0; i < out.size(); i++) if (fabsf(out[i]) > 1e-4f) { first = (int)i; break; }
+    printf("    first energy at sample %d\n", first);
+    assert(first >= 0 && first < 96);
+    printf("  ok zero_latency_voice_has_no_shifter_delay\n");
+}
+
+static void test_output_is_finite_and_unclipped() {
+    std::vector<float> in(48000);
+    for (size_t i = 0; i < in.size(); i++)
+        in[i] = 0.9f * sinf(2.f * (float)M_PI * 110.f * i / 48000.f);
+    auto out = run_voice(in, -7, -5, 1.f, -0.5f, 1.f, 120.f, 1.f, 1.f);
+    for (float x : out) { assert(std::isfinite(x)); assert(fabsf(x) <= 1.5f); }
+    printf("  ok output_is_finite_and_unclipped\n");
+}
+
+static void test_is_deterministic() {
+    std::vector<float> in(24000);
+    for (size_t i = 0; i < in.size(); i++)
+        in[i] = 0.4f * sinf(2.f * (float)M_PI * 180.f * i / 48000.f);
+    auto a = run_voice(in, 5, 2, 0.5f, 0.3f, 0.4f, 0, 0.3f, 1.f);
+    auto b = run_voice(in, 5, 2, 0.5f, 0.3f, 0.4f, 0, 0.3f, 1.f);
+    for (size_t i = 0; i < a.size(); i++) assert(a[i] == b[i]);
+    printf("  ok is_deterministic\n");
+}
+
+static void test_block_size_invariance() {
+    std::vector<float> in(98304);
+    for (size_t i = 0; i < in.size(); i++)
+        in[i] = 0.4f * sinf(2.f * (float)M_PI * 160.f * i / 48000.f);
+    auto a = run_voice(in, 4, 0, 0, 0, 0, 0, 0, 1.f, 256);
+    auto b = run_voice(in, 4, 0, 0, 0, 0, 0, 0, 1.f, 1024);
+    float ha = estimate_hz(a), hb = estimate_hz(b);
+    printf("    block 256 -> %.1f Hz, block 1024 -> %.1f Hz\n", ha, hb);
+    assert(fabsf(ha - hb) < 4.f);
+    printf("  ok block_size_invariance\n");
+}
+
 int main() {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     load();
     test_descriptor_shape();
     test_bypass_is_bit_exact();
+    test_pitch_voice_shifts_fundamental();
+    test_zero_latency_voice_has_no_shifter_delay();
+    test_output_is_finite_and_unclipped();
+    test_is_deterministic();
+    test_block_size_invariance();
     printf("test_plugin: PASS\n");
     return 0;
 }
