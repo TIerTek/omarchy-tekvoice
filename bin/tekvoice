@@ -173,6 +173,27 @@ cmd_strength() {
     echo "strength: $1"
 }
 
+# Cycling lives in the CLI, not the bar widget, so the hotkeys keep working
+# when the shell is down or the widget is not in the bar.
+cmd_cycle() {
+    running || die "not armed - run 'tekvoice arm' first"
+    dir="$1"
+    cur="$(state_get voice)"
+    next=$(python3 - "$VOICES" "$cur" "$dir" <<'PY2'
+import json, sys
+path, cur, d = sys.argv[1], sys.argv[2], int(sys.argv[3])
+ids = [v["id"] for v in json.load(open(path))["voices"]]
+if not ids: sys.exit(1)
+i = ids.index(cur) if cur in ids else -1
+print(ids[0] if i < 0 else ids[(i + d) % len(ids)])
+PY2
+) || die "could not read $VOICES"
+    apply_voice "$next"
+    state_set voice "$next"
+    state_set mix 1
+    echo "voice: $next"
+}
+
 cmd_panic() {
     running || { echo "not armed"; return 0; }
     cid=$(capture_id)
@@ -201,7 +222,9 @@ case "${1:-}" in
     disarm)   shift; cmd_disarm "${1:-}" ;;
     set)      shift; cmd_set "$@" ;;
     strength) shift; cmd_strength "$@" ;;
+    next)     shift; cmd_cycle 1 ;;
+    prev)     shift; cmd_cycle -1 ;;
     panic)    shift; cmd_panic ;;
     status)   shift; cmd_status ;;
-    *) echo "usage: tekvoice arm|disarm [--force]|set <voice>|strength <0-100>|panic|status" >&2; exit 1 ;;
+    *) echo "usage: tekvoice arm|disarm [--force]|set <voice>|next|prev|strength <0-100>|panic|status" >&2; exit 1 ;;
 esac

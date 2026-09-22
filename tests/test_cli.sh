@@ -23,6 +23,13 @@ AFTER=$(pactl list short sources | grep tekvoice_src | cut -f1)
 [ "$BEFORE" = "$AFTER" ] || fail "source index changed on voice switch - the mic dropped"
 ./bin/tekvoice status | grep -q '^voice=deepsix$' || fail "voice did not change"
 
+./bin/tekvoice next || fail "next failed"
+./bin/tekvoice status | grep -q '^voice=whisperkill$' || fail "next should advance deepsix -> whisperkill"
+./bin/tekvoice prev || fail "prev failed"
+./bin/tekvoice status | grep -q '^voice=deepsix$' || fail "prev should return to deepsix"
+AFTER3=$(pactl list short sources | grep tekvoice_src | cut -f1)
+[ "$BEFORE" = "$AFTER3" ] || fail "source index changed while cycling - the mic dropped"
+
 ./bin/tekvoice strength 50 || fail "strength failed"
 ./bin/tekvoice status | grep -q '^strength=50$' || fail "strength not recorded"
 
