@@ -73,12 +73,47 @@ BarWidget {
   // Every action goes through the CLI rather than talking to PipeWire here.
   // One implementation, one set of guarantees — the hotkeys, the panel and the
   // bar all get the same atomic single-write voice change.
-  Process { id: actionProc; onExited: root.refresh() }
+  //
+  // Commands run one at a time through a queue (see VoiceModel.enqueue for why
+  // a plain "skip if running" guard lost the first of two same-tick commands).
+  // The CLI's own error is kept and shown, so a failed arm is not silent.
+  property var queue: []
+  property bool busy: false
+  property var lastExit: null
+  property string lastError: ""
+
+  Process {
+    id: actionProc
+    stderr: StdioCollector { id: actionErr }
+    onExited: function(exitCode) { root.lastExit = exitCode }
+    // Pumped from `running`, not `exited`: a command that fails to start
+    // never emits exited, and would otherwise wedge the queue for good.
+    onRunningChanged: if (!running && root.busy) root.finished()
+  }
+
+  function finished() {
+    var code = root.lastExit
+    if (code === 0) root.lastError = ""
+    else if (code === null) root.lastError = "could not run " + root.cli
+    else root.lastError = VoiceModel.errorText(actionErr.text)
+    root.queue = VoiceModel.afterExit(root.queue, code)
+    root.busy = false
+    root.refresh()
+    root.pump()
+  }
+
+  function pump() {
+    if (root.busy || root.queue.length === 0) return
+    root.busy = true
+    root.lastExit = null
+    actionProc.command = root.queue[0]
+    root.queue = root.queue.slice(1)
+    actionProc.running = true
+  }
 
   function run(args) {
-    if (actionProc.running) return
-    actionProc.command = [root.cli].concat(args)
-    actionProc.running = true
+    root.queue = VoiceModel.enqueue(root.queue, [root.cli].concat(args))
+    root.pump()
   }
 
   function arm()            { root.run(["arm"]) }
@@ -91,9 +126,11 @@ BarWidget {
   function cycleVoice(dir)  { if (dir < 0) root.prev(); else root.next() }
 
   // Arming and choosing in one gesture: clicking a voice while disarmed should
-  // just work rather than making the user find the arm switch first.
+  // just work rather than making the user find the arm switch first. Arm is
+  // queued unconditionally: `status` is polled, so `armed` can be two seconds
+  // stale, and arming an armed TekVoice is a cheap no-op.
   function pick(id) {
-    if (!root.armed) root.run(["arm"])
+    root.run(["arm"])
     root.run(["set", id])
   }
 
@@ -154,6 +191,8 @@ BarWidget {
     dimmed: !root.armed
 
     tooltipText: {
+      if (root.lastError) return "TekVoice · " + root.lastError
+      if (root.busy) return "TekVoice · working…"
       if (!root.armed) return "TekVoice off"
       if (!root.live) return "TekVoice armed \u00b7 your real voice is passing through"
       var t = "TekVoice \u00b7 " + root.voiceName

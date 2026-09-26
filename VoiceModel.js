@@ -72,7 +72,48 @@ function ids(voices) {
   return out;
 }
 
+// ---------------------------------------------------------------- action queue
+//
+// The widget runs one CLI command at a time. Quickshell starts a Process on
+// the next tick, so `running` is still false straight after it is set: a
+// second command issued in the same tick (arm, then set) used to overwrite the
+// first instead of waiting behind it. Actions queue instead.
+
+var MAX_QUEUE = 8;
+
+// Returns a new array — QML only notices a property change on reassignment.
+// Full queues drop the newcomer: a spun scroll wheel must not queue a minute
+// of voice changes.
+function enqueue(queue, args) {
+  if (queue.length >= MAX_QUEUE) return queue;
+  return queue.concat([args]);
+}
+
+// After a command finishes. On failure the rest is dropped: every later step
+// (a `set` after a failed `arm`) would only fail too and bury the real error.
+// A null exit code means the command never started.
+function afterExit(queue, exitCode) {
+  return exitCode === 0 ? queue : [];
+}
+
+// The CLI's last stderr line, without its "tekvoice: " prefix, bounded
+// because it lands in a tooltip.
+function errorText(stderr) {
+  var lines = String(stderr || "").split("\n");
+  for (var i = lines.length - 1; i >= 0; i--) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    if (line.indexOf("tekvoice: ") === 0) line = line.slice(10);
+    return line.length > 200 ? line.slice(0, 199) + "…" : line;
+  }
+  return "command failed";
+}
+
 if (typeof module !== "undefined") module.exports = {
+  MAX_QUEUE: MAX_QUEUE,
+  enqueue: enqueue,
+  afterExit: afterExit,
+  errorText: errorText,
   parseStatus: parseStatus,
   cycle: cycle,
   findVoice: findVoice,

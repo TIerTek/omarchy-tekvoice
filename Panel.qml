@@ -114,11 +114,23 @@ Panel {
           elide: Text.ElideRight
         }
 
+        // The CLI's last error, e.g. a missing build dependency on first arm.
+        Text {
+          width: parent.width
+          visible: text !== ""
+          textFormat: Text.PlainText
+          text: root.hostWidget ? root.hostWidget.lastError : ""
+          color: Color.urgent
+          font.family: root.family
+          font.pixelSize: Style.font.bodySmall
+          wrapMode: Text.Wrap
+        }
+
         Text {
           width: parent.width
           textFormat: Text.PlainText
           text: root.armed
-            ? "Pick “TekVoice” as your microphone in Zoom, Discord, Meet or OBS. Press 1–9."
+            ?"Pick “TekVoice” as your microphone in Zoom, Discord, Meet or OBS. Press 1–9."
             : "Choose a voice to arm TekVoice and add its microphone."
           color: Color.foreground
           opacity: 0.45

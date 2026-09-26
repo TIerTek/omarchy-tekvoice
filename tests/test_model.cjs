@@ -38,4 +38,30 @@ assert.strictEqual(tint([], null), null);
 assert.strictEqual(describe(voices, 'quackers'), 'Quackers');
 assert.strictEqual(describe(voices, null), 'No voice');
 
+// Action queue. Picking a voice while disarmed is two commands issued in the
+// same tick; the second must wait behind the first, not replace it.
+const { enqueue, afterExit, errorText, MAX_QUEUE } = VM;
+let q = [];
+q = enqueue(q, ['arm']);
+q = enqueue(q, ['set', 'quackers']);
+assert.deepStrictEqual(q, [['arm'], ['set', 'quackers']], 'arm then set, in order');
+assert.deepStrictEqual(enqueue([], ['x']), [['x']]);
+const before = [['a']];
+enqueue(before, ['b']);
+assert.deepStrictEqual(before, [['a']], 'enqueue must not mutate (QML only notices reassignment)');
+
+let full = [];
+for (let i = 0; i < MAX_QUEUE + 5; i++) full = enqueue(full, ['next']);
+assert.strictEqual(full.length, MAX_QUEUE, 'a spun scroll wheel must not queue unbounded work');
+
+assert.deepStrictEqual(afterExit([['set', 'quackers']], 0), [['set', 'quackers']], 'success carries on');
+assert.deepStrictEqual(afterExit([['set', 'quackers']], 1), [], 'failure drops the rest so the real error is not buried');
+assert.deepStrictEqual(afterExit([['set', 'quackers']], null), [], 'a command that never started counts as failed');
+
+assert.strictEqual(errorText('tekvoice: not armed - run \'tekvoice arm\' first\n'), 'not armed - run \'tekvoice arm\' first');
+assert.strictEqual(errorText('building...\ntekvoice: build failed; see /x/build.log\n\n'), 'build failed; see /x/build.log', 'last line wins');
+assert.strictEqual(errorText(''), 'command failed');
+assert.strictEqual(errorText(null), 'command failed');
+assert.ok(errorText('x'.repeat(1000)).length <= 200, 'bounded, it lands in a tooltip');
+
 console.log('test_model: PASS');
