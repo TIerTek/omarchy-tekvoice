@@ -32,6 +32,15 @@ function parseStatus(text) {
   return out;
 }
 
+// Whether anything a person would notice differs between two parsed statuses.
+// The consumer count is left out: an app opening the mic does not make an
+// earlier error about arming any less true.
+function stateChanged(a, b) {
+  if (!a || !b) return true;
+  return a.armed !== b.armed || a.voice !== b.voice ||
+         a.mix !== b.mix || a.strength !== b.strength;
+}
+
 function clampInt(v, lo, hi, def) {
   var n = parseInt(v, 10);
   if (isNaN(n)) return def;
@@ -115,6 +124,7 @@ if (typeof module !== "undefined") module.exports = {
   afterExit: afterExit,
   errorText: errorText,
   parseStatus: parseStatus,
+  stateChanged: stateChanged,
   cycle: cycle,
   findVoice: findVoice,
   tint: tint,

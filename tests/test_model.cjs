@@ -64,4 +64,16 @@ assert.strictEqual(errorText(''), 'command failed');
 assert.strictEqual(errorText(null), 'command failed');
 assert.ok(errorText('x'.repeat(1000)).length <= 200, 'bounded, it lands in a tooltip');
 
+// A stale error clears once the state moves on (armed from a hotkey or the
+// terminal), but not merely because an app started listening.
+const { stateChanged } = VM;
+const off = parseStatus('armed=no\n');
+const on = parseStatus('armed=yes\nvoice=quackers\nmix=1\n');
+const onHeard = parseStatus('armed=yes\nconsumers=3\nvoice=quackers\nmix=1\n');
+assert.strictEqual(stateChanged(off, on), true);
+assert.strictEqual(stateChanged(on, parseStatus('armed=yes\nvoice=chipper\nmix=1\n')), true);
+assert.strictEqual(stateChanged(on, parseStatus('armed=yes\nvoice=quackers\nmix=0\n')), true, 'panic is a change');
+assert.strictEqual(stateChanged(off, parseStatus('armed=no\n')), false);
+assert.strictEqual(stateChanged(on, onHeard), false, 'a new listener is not a state change');
+
 console.log('test_model: PASS');

@@ -54,7 +54,13 @@ BarWidget {
     id: statusProc
     command: [root.cli, "status"]
     stdout: StdioCollector {
-      onStreamFinished: root.status = VoiceModel.parseStatus(this.text)
+      onStreamFinished: {
+        var next = VoiceModel.parseStatus(this.text)
+        // An error describes the moment it happened. Once the state moves on,
+        // e.g. armed from a hotkey or the terminal, it is stale and misleading.
+        if (VoiceModel.stateChanged(root.status, next)) root.lastError = ""
+        root.status = next
+      }
     }
   }
 

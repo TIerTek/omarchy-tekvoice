@@ -76,8 +76,12 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keys
+    // contentWidth is the card's OUTER width: padding and border come out of
+    // it. KeyboardPanel exposes only the vertical inset; padding and border
+    // are the same on every side, so it doubles as the horizontal one.
     contentWidth: panel.fittedContentWidth(
-      root.columns * (root.cellWidth + Style.space(8)) + Style.space(8))
+      root.columns * root.cellWidth + (root.columns - 1) * Style.space(8)
+      + panel.verticalContentInset)
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
