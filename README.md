@@ -33,8 +33,21 @@ that do not shift pitch add essentially nothing.
 
 ## Install
 
-Requires `pipewire` and `rubberband`, both in Arch `extra`. Nothing else —
-`ladspa.h` is vendored, and the build uses plain `make`.
+Requires `pipewire` and `rubberband`, both in Arch `extra`, plus a compiler
+(`base-devel`). Nothing else — `ladspa.h` is vendored, and the build uses
+plain `make`.
+
+```sh
+omarchy plugin add https://github.com/TIerTek/omarchy-tekvoice --enable
+```
+
+The audio engine is a small C++ library compiled on your machine. It builds
+itself the first time you arm TekVoice (a few seconds), and again after an
+update if the sources changed; run `bin/tekvoice build` to do it up front. If
+a build tool is missing, the bar tooltip and the panel say which package to
+install.
+
+Or from a clone, which also copies the engine to `~/.ladspa`:
 
 ```sh
 git clone https://github.com/TIerTek/omarchy-tekvoice

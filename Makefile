@@ -35,12 +35,15 @@ test-voices:
 test-model:
 	node tests/test_model.cjs
 
+test-build:
+	sh tests/test_build.sh
+
 test-cli:
 	sh tests/test_cli.sh
 
-test: test-dsp test-shifter test-plugin test-voices test-model
+test: test-dsp test-shifter test-plugin test-voices test-model test-build
 
 clean:
 	rm -rf build
 
-.PHONY: all test test-dsp test-shifter test-plugin test-voices test-model test-cli clean
+.PHONY: all test test-dsp test-shifter test-plugin test-voices test-model test-build test-cli clean

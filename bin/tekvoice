@@ -15,11 +15,32 @@ VOICES="$HERE/voices.json"
 
 die() { echo "tekvoice: $*" >&2; exit 1; }
 
+LADSPA_DIR="${TEKVOICE_LADSPA_DIR:-$HOME/.ladspa}"
+MAKE="${MAKE:-make}"
+
+# `omarchy plugin add` only runs `git clone`: a marketplace install has the
+# sources and no engine. Build it in place, first time and after every update
+# (make is a no-op when nothing changed). Everything stays in the plugin dir.
+build_so() {
+    missing=""
+    command -v "$MAKE" >/dev/null 2>&1 || missing="$missing make"
+    command -v "${CXX:-g++}" >/dev/null 2>&1 || missing="$missing g++"
+    command -v pkg-config >/dev/null 2>&1 || missing="$missing pkg-config"
+    [ -n "$missing" ] && die "cannot build the audio engine, missing:$missing - install them with: sudo pacman -S --needed base-devel rubberband"
+    pkg-config --exists rubberband 2>/dev/null \
+        || die "cannot build the audio engine, Rubber Band is missing - install it with: sudo pacman -S --needed rubberband"
+    mkdir -p "$STATE_DIR"
+    "$MAKE" -s -C "$HERE" build/libtekvoice.so >"$STATE_DIR/build.log" 2>&1 \
+        || die "building the audio engine failed; see $STATE_DIR/build.log"
+    echo "$HERE/build/libtekvoice.so"
+}
+
+# An explicit TEKVOICE_SO or install.sh's copy wins; otherwise the in-place build.
 resolve_so() {
-    for c in "${TEKVOICE_SO:-}" "$HOME/.ladspa/libtekvoice.so" "$HERE/build/libtekvoice.so"; do
+    for c in "${TEKVOICE_SO:-}" "$LADSPA_DIR/libtekvoice.so"; do
         [ -n "$c" ] && [ -f "$c" ] && { echo "$c"; return 0; }
     done
-    die "libtekvoice.so not found - run make, or install.sh"
+    build_so
 }
 
 state_get() { [ -f "$STATE" ] && sed -n "s/^$1=//p" "$STATE" | tail -1 || true; }
@@ -226,5 +247,6 @@ case "${1:-}" in
     prev)     shift; cmd_cycle -1 ;;
     panic)    shift; cmd_panic ;;
     status)   shift; cmd_status ;;
-    *) echo "usage: tekvoice arm|disarm [--force]|set <voice>|next|prev|strength <0-100>|panic|status" >&2; exit 1 ;;
+    build)    shift; so=$(build_so); echo "built $so" ;;
+    *) echo "usage: tekvoice arm|disarm [--force]|set <voice>|next|prev|strength <0-100>|panic|status|build" >&2; exit 1 ;;
 esac
