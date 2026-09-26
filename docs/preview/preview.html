@@ -1,0 +1,121 @@
+<!doctype html>
+<!-- Source of ../../preview.png. Render: google-chrome-stable --headless=new --hide-scrollbars --force-device-scale-factor=2 --window-size=1600,900 --screenshot=preview.png preview.html -->
+<html><head><meta charset="utf-8"><title>TekVoice preview</title>
+<style>
+  :root { --bg:#0b0c0d; --fg:#ecebe6; --dim:#8d9094; --faint:#2a2d30; --accent:#ff5b35; --bezel:#d9d6cf; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1600px; height:900px; background:var(--bg); overflow:hidden; }
+  body { font-family:'JetBrainsMono Nerd Font','JetBrains Mono',monospace; color:var(--fg); position:relative;
+    background:
+      radial-gradient(ellipse 900px 600px at 72% 50%, rgba(255,91,53,.07), transparent 70%),
+      linear-gradient(var(--faint) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--faint) 1px, transparent 1px) 0 0/40px 40px, var(--bg);
+  }
+  body::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.72)); pointer-events:none; }
+  .corner { position:absolute; width:58px; height:58px; border-color:#6b6e72; border-style:solid; border-width:0; z-index:2; }
+  .tl { left:32px; top:32px; border-left-width:2px; border-top-width:2px; }
+  .tr { right:32px; top:32px; border-right-width:2px; border-top-width:2px; }
+  .bl { left:32px; bottom:32px; border-left-width:2px; border-bottom-width:2px; }
+  .br { right:32px; bottom:32px; border-right-width:2px; border-bottom-width:2px; }
+  .plus { position:absolute; color:#55585c; font-size:22px; z-index:2; }
+
+  .left { position:absolute; left:96px; top:128px; width:640px; z-index:3; }
+  .kicker { color:var(--accent); font-size:17px; letter-spacing:.42em; font-weight:700; }
+  h1 { font-size:112px; font-weight:800; letter-spacing:.06em; margin:18px 0 22px -4px; line-height:1;
+       text-shadow:0 0 28px rgba(255,120,80,.35), 0 0 2px rgba(255,255,255,.6); }
+  .tag { font-size:24px; line-height:1.5; color:#c9c9c4; max-width:600px; }
+  .pill { margin:30px 0 34px; width:540px; height:52px; background:linear-gradient(#f1efe9,#d8d5ce); border:2px solid #f1efe9;
+          outline:1px solid #6b6e72; outline-offset:3px; display:flex; align-items:center; padding:0 20px; gap:14px;
+          color:#111; font-weight:800; font-size:21px; letter-spacing:.14em;
+          background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 1px, transparent 1px 3px), linear-gradient(#f1efe9,#d8d5ce); }
+  .dot { width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); flex:none; }
+  .cursor { width:13px; height:24px; background:#111; }
+  ul { list-style:none; }
+  li { display:flex; align-items:center; gap:16px; font-size:21px; margin:0 0 17px; white-space:nowrap; }
+  .box { width:24px; height:24px; border:2px solid var(--accent); position:relative; flex:none; }
+  .box::before,.box::after { content:""; position:absolute; left:50%; top:50%; width:15px; height:2px; background:var(--accent); }
+  .box::before { transform:translate(-50%,-50%) rotate(45deg); }
+  .box::after  { transform:translate(-50%,-50%) rotate(-45deg); }
+  li b { font-weight:700; }
+  li span { color:var(--dim); }
+  .foot { position:absolute; left:96px; bottom:62px; color:#7a7d80; font-size:16px; letter-spacing:.14em; z-index:3; }
+
+  .rig { position:absolute; left:790px; top:118px; z-index:3; }
+  .bezel { width:696px; padding:30px 70px 54px 34px; border-radius:30px; position:relative;
+           background:linear-gradient(160deg,#e8e5de,#c7c3bb); box-shadow:0 30px 80px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.7), inset 0 -3px 0 rgba(0,0,0,.18); }
+  .screen { border-radius:20px; overflow:hidden; background:#050607; padding:10px; box-shadow:inset 0 0 0 3px #1b1d1f, inset 0 0 40px rgba(0,0,0,.9); position:relative; }
+  .screen img { display:block; width:572px; border-radius:10px; }
+  .screen::after { content:""; position:absolute; inset:0; border-radius:20px; pointer-events:none;
+                   background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px),
+                              radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.08), transparent 55%); }
+  .vents { position:absolute; right:22px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:8px; }
+  .vents i { width:34px; height:3px; background:#8c8981; border-radius:2px; }
+  .label { position:absolute; left:0; right:36px; bottom:18px; text-align:center; color:#6d6a63; font-size:13px; letter-spacing:.42em; }
+  .led { position:absolute; right:30px; bottom:18px; width:16px; height:16px; border-radius:50%;
+         background:radial-gradient(circle at 35% 35%, #ffb199, var(--accent) 55%, #b3321a); box-shadow:0 0 14px var(--accent); }
+  .card { position:absolute; right:-36px; top:-38px; width:330px; background:#0d0f10; border:2px solid #cfccc5; font-size:15px; z-index:4; box-shadow:0 12px 30px rgba(0,0,0,.6); }
+  .card .r1 { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #4a4d50; letter-spacing:.12em; font-weight:700; }
+  .card .r2 { display:flex; justify-content:space-between; padding:8px 14px; font-size:12px; letter-spacing:.26em; color:#b9b8b2; }
+  .card .r2 em { font-style:normal; color:#6f7275; letter-spacing:.1em; }
+  .onair { color:var(--accent); display:flex; align-items:center; gap:8px; font-size:13px; letter-spacing:.2em; }
+  .onair .dot { width:10px; height:10px; }
+  .scope { margin-top:26px; width:696px; display:grid; grid-template-columns:70px 1fr; row-gap:6px; align-items:center; font-size:12px; letter-spacing:.3em; color:#76797c; }
+  .scope svg { width:100%; height:34px; display:block; }
+</style></head>
+<body>
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="plus" style="left:760px;top:70px">+</div>
+
+  <div class="left">
+    <div class="kicker">OMARCHY PLUGIN · BAR WIDGET</div>
+    <h1>TEKVOICE</h1>
+    <p class="tag">A live voice changer on a virtual microphone. Pick a voice in the bar, and every app you talk into hears it.</p>
+    <div class="pill"><span class="dot"></span>ON AIR : QUACKERS<span class="cursor"></span></div>
+    <ul>
+      <li><i class="box"></i><b>Nine voices</b><span>· chipmunk, giant, robot, radio</span></li>
+      <li><i class="box"></i><b>Every app</b><span>· Zoom, Discord, Meet, OBS</span></li>
+      <li><i class="box"></i><b>Never drops</b><span>· switch voices mid-call</span></li>
+      <li><i class="box"></i><b>Panic key</b><span>· your real voice, instantly</span></li>
+      <li><i class="box"></i><b>Real formants</b><span>· a new person, not a cartoon</span></li>
+      <li><i class="box"></i><b>Pure PipeWire</b><span>· no sudo, no kernel module</span></li>
+    </ul>
+  </div>
+
+  <div class="rig">
+    <div class="bezel">
+      <div class="card">
+        <div class="r1"><span>VOICE 02 · Quackers</span><span class="onair"><span class="dot"></span>LIVE</span></div>
+        <div class="r2"><span>PITCH +7 · FORMANT +12</span><em>STR 100</em></div>
+      </div>
+      <div class="screen"><img src="panel.png" alt=""></div>
+      <div class="vents"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="label">TEKVOICE · VIRTUAL MIC</div>
+      <div class="led"></div>
+    </div>
+    <div class="scope">
+      <span>IN</span><svg id="in" viewBox="0 0 640 34" preserveAspectRatio="none"></svg>
+      <span style="color:var(--accent)">OUT</span><svg id="out" viewBox="0 0 640 34" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <div class="foot">github.com/TierTek/omarchy-tekvoice</div>
+
+<script>
+  // Two deterministic "speech" traces: the same envelope, the output at a higher pitch.
+  function trace(id, freq, color, width) {
+    let d = "";
+    for (let x = 0; x <= 640; x += 1) {
+      const t = x / 640;
+      // syllable-like bursts with short gaps, the way speech looks on a scope
+      const syl = Math.pow(Math.abs(Math.sin(t * Math.PI * 7.5)), 0.6);
+      const env = syl * (0.55 + 0.45 * Math.sin(t * 9.1 + 0.7) ** 2) * (Math.sin(t * Math.PI * 7.5) > -0.2 ? 1 : 0.15);
+      const y = 17 - 15 * env * (Math.sin(x * freq) * 0.75 + Math.sin(x * freq * 2.3 + 1) * 0.25);
+      d += (x ? "L" : "M") + x + " " + y.toFixed(2);
+    }
+    document.getElementById(id).innerHTML =
+      `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>`;
+  }
+  trace("in", 0.30, "#8d9094", 1.4);
+  trace("out", 0.30 * Math.pow(2, 7 / 12), "#ff5b35", 1.6);
+</script>
+</body></html>

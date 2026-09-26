@@ -6,7 +6,7 @@
   "author": "TierTek",
   "license": "GPL-3.0-or-later",
   "description": "A live voice changer on a virtual microphone. Pick a voice in the bar and every app - Zoom, Discord, Meet, OBS - hears it. Switching voices never drops the mic, and a panic key brings your real voice straight back.",
-  "homepage": "https://github.com/TIerTek/omarchy-tekvoice",
+  "homepage": "https://github.com/TierTek/omarchy-tekvoice",
   "kinds": [
     "bar-widget"
   ],

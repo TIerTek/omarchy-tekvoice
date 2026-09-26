@@ -1,5 +1,7 @@
 # TekVoice
 
+![TekVoice: nine voices on a virtual microphone, chosen from the Omarchy bar](preview.png)
+
 A live voice changer for [Omarchy](https://omarchy.org) that presents a **virtual
 microphone** every application can select. Pick a voice in the bar and the person
 on the other end of your call hears it — Zoom, Discord, Meet, OBS, Chrome.
@@ -33,12 +35,20 @@ that do not shift pitch add essentially nothing.
 
 ## Install
 
-Requires `pipewire` and `rubberband`, both in Arch `extra`, plus a compiler
-(`base-devel`). Nothing else — `ladspa.h` is vendored, and the build uses
-plain `make`.
+### Dependencies
+
+| package | why | on a stock Omarchy install |
+|---|---|---|
+| `pipewire` | hosts the filter and publishes the microphone | yes |
+| `rubberband` | real-time pitch and formant shifting | yes (pulled in by `ffmpeg`/`mpv`) |
+| `base-devel` (`make`, `g++`, `pkgconf`) | compiles the audio engine once | yes |
+| `python3` | reads `voices.json` and PipeWire's state | yes |
+
+Nothing else — `ladspa.h` is vendored, and the build uses plain `make`. If any
+of these is missing: `sudo pacman -S --needed pipewire rubberband base-devel python`.
 
 ```sh
-omarchy plugin add https://github.com/TIerTek/omarchy-tekvoice --enable
+omarchy plugin add https://github.com/TierTek/omarchy-tekvoice --enable
 ```
 
 The audio engine is a small C++ library compiled on your machine. It builds
@@ -50,7 +60,7 @@ install.
 Or from a clone, which also copies the engine to `~/.ladspa`:
 
 ```sh
-git clone https://github.com/TIerTek/omarchy-tekvoice
+git clone https://github.com/TierTek/omarchy-tekvoice
 cd omarchy-tekvoice
 ./install.sh
 ```
@@ -59,6 +69,20 @@ cd omarchy-tekvoice
 
 Then add the TekVoice widget to your bar, `omarchy restart shell`, and append
 `hypr/tekvoice.lua` to `~/.config/hypr/bindings.lua`.
+
+### Remove
+
+```sh
+tekvoice disarm --force                 # drop the microphone if it is armed
+omarchy plugin remove tiertek.tekvoice  # removes the plugin and its bar entry
+rm -f ~/.ladspa/libtekvoice.so          # only if you used install.sh
+```
+
+If you added the hotkeys, delete the block between `-- BEGIN tiertek.tekvoice`
+and `-- END tiertek.tekvoice` in `~/.config/hypr/bindings.lua` and run
+`omarchy restart hyprland`. Runtime state lives in `$XDG_RUNTIME_DIR/tekvoice`
+and disappears at logout. TekVoice changes nothing else: no system files, no
+PipeWire or WirePlumber configuration, no default-device changes.
 
 ## Use
 
@@ -124,4 +148,5 @@ determinism and block-size invariance.
 
 ## Licence
 
-GPL-3.0-or-later. `src/ladspa.h` is vendored public-domain.
+GPL-3.0-or-later — see [`LICENSE`](LICENSE). `src/ladspa.h` is vendored
+public-domain. Security notes for reviewers are in [`SECURITY.md`](SECURITY.md).
