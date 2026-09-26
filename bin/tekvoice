@@ -6,7 +6,11 @@
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-STATE_DIR="${TEKVOICE_STATE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/tekvoice}"
+# Per-user runtime dir only. A shared /tmp fallback would let another account
+# plant the pidfile this script later passes to `kill`.
+[ -n "${TEKVOICE_STATE_DIR:-}" ] || [ -n "${XDG_RUNTIME_DIR:-}" ] \
+    || { echo "tekvoice: XDG_RUNTIME_DIR is not set - run inside a normal login session" >&2; exit 1; }
+STATE_DIR="${TEKVOICE_STATE_DIR:-$XDG_RUNTIME_DIR/tekvoice}"
 CONF_DIR="$STATE_DIR/pw"
 STATE="$STATE_DIR/state"
 PIDFILE="$STATE_DIR/pid"
@@ -52,9 +56,14 @@ state_set() {
     mv "$STATE.tmp" "$STATE"
 }
 
+# A pid only counts if it is still our pipewire filter process: after a crash
+# the number can be reused, and `disarm` must never kill an unrelated program.
 running() {
     [ -f "$PIDFILE" ] || return 1
-    kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+    pid=$(cat "$PIDFILE")
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "pipewire" ] || return 1
+    kill -0 "$pid" 2>/dev/null
 }
 
 # Control ports live on the CAPTURE node, not the source node.
