@@ -12,14 +12,16 @@ reviewer should look.
 | `BarWidget.qml` / `Panel.qml` | shell | Run only `bin/tekvoice`, through `Process` with a fixed argument array (`[cli, verb, arg]`). Nothing goes through `bar.run()` or a shell. |
 | `libtekvoice.so` | none | A LADSPA plugin loaded by that filter-chain process. It reads audio in, writes audio out, and does no file or network I/O. Buffers are allocated when the plugin is instantiated. |
 | first-arm build | none | If no engine is installed, `arm` runs `make` in the plugin's own directory, writing only `build/`. No download: everything compiled is in the repo, and `ladspa.h` is vendored. |
-| `install.sh` | none | Optional. Copies the engine to `~/.ladspa` and symlinks the plugin directory. Never uses `sudo`. |
+| `install.sh` | none | Optional. Copies the engine to `~/.ladspa` and symlinks the plugin directory. Never uses `sudo`. It replaces only what it installed itself: an engine whose sha256 matches its record file (or is identical to the new build), and a plugin link that already points at a TekVoice checkout. Any other file, symlink or directory at either path is refused before anything is written. Files are written to fresh temp files and renamed into place, never through a link. |
 
 ## What it writes
 
 - `$XDG_RUNTIME_DIR/tekvoice/`: the generated filter-chain config, a pidfile,
   a `key=value` state file, and the filter and build logs. It is gone at logout.
 - `build/` inside the plugin directory.
-- With `install.sh` only: `~/.ladspa/libtekvoice.so`.
+- With `install.sh` only: `~/.ladspa/libtekvoice.so`, its ownership record
+  `~/.ladspa/.libtekvoice.so.tekvoice` (the sha256 it installed), and the
+  symlink `~/.config/omarchy/plugins/tiertek.tekvoice`.
 
 It never touches system files, PipeWire or WirePlumber configuration, or the
 default input device. Arming adds a source named `TekVoice`, and apps use it

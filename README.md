@@ -65,7 +65,9 @@ cd omarchy-tekvoice
 ./install.sh
 ```
 
-`install.sh` never uses `sudo`; everything is installed under `$HOME`.
+`install.sh` never uses `sudo`; everything is installed under `$HOME`. It only
+replaces an engine or plugin link it installed itself, and stops with a message
+if anything else is already at either path.
 
 Then add the TekVoice widget to your bar, `omarchy restart shell`, and append
 `hypr/tekvoice.lua` to `~/.config/hypr/bindings.lua`.
@@ -75,7 +77,7 @@ Then add the TekVoice widget to your bar, `omarchy restart shell`, and append
 ```sh
 tekvoice disarm --force                 # drop the microphone if it is armed
 omarchy plugin remove tiertek.tekvoice  # removes the plugin and its bar entry
-rm -f ~/.ladspa/libtekvoice.so          # only if you used install.sh
+rm -f ~/.ladspa/libtekvoice.so ~/.ladspa/.libtekvoice.so.tekvoice  # only if you used install.sh
 ```
 
 If you added the hotkeys, delete the block between `-- BEGIN tiertek.tekvoice`

@@ -41,12 +41,15 @@ test-pidfile:
 test-build:
 	sh tests/test_build.sh
 
+test-install:
+	sh tests/test_install.sh
+
 test-cli:
 	sh tests/test_cli.sh
 
-test: test-dsp test-shifter test-plugin test-voices test-model test-pidfile test-build
+test: test-dsp test-shifter test-plugin test-voices test-model test-pidfile test-build test-install
 
 clean:
 	rm -rf build
 
-.PHONY: all test test-dsp test-shifter test-plugin test-voices test-model test-pidfile test-build test-cli clean
+.PHONY: all test test-dsp test-shifter test-plugin test-voices test-model test-pidfile test-build test-install test-cli clean
