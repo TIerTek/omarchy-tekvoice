@@ -56,14 +56,60 @@ state_set() {
     mv "$STATE.tmp" "$STATE"
 }
 
-# A pid only counts if it is still our pipewire filter process: after a crash
-# the number can be reused, and `disarm` must never kill an unrelated program.
+# The pidfile holds "<pid> <starttime>". A pid only counts if it is still the
+# exact process `arm` spawned: same kernel start time (a reused pid has a new
+# one), `pipewire -c filter-chain.conf`, and our private PIPEWIRE_CONFIG_DIR.
+# The user's own PipeWire daemon fails all three, so disarm can never kill it.
+#   proc_ctl start <pid>         print the pid's start time
+#   proc_ctl check <pid> <start> exit 0 only if it is our filter process
+#   proc_ctl kill  <pid> <start> pin it with a pidfd, re-check, then SIGTERM
+# Kill opens the pidfd FIRST and verifies after, so the pid cannot be reused
+# between the check and the signal.
+proc_ctl() {
+    python3 - "$CONF_DIR" "$@" <<'PY'
+import os, signal, sys
+conf, mode, pid = sys.argv[1], sys.argv[2], sys.argv[3]
+if not pid.isdigit(): sys.exit(1)
+def start(p):
+    try: st = open("/proc/%s/stat" % p).read()
+    except OSError: return None
+    return st[st.rindex(")") + 2:].split()[19]
+def ours(p, want):
+    try:
+        if start(p) != want: return False
+        if open("/proc/%s/comm" % p).read().strip() != "pipewire": return False
+        argv = open("/proc/%s/cmdline" % p, "rb").read().split(b"\0")[:-1]
+        if [os.path.basename(argv[0])] + argv[1:] != [b"pipewire", b"-c", b"filter-chain.conf"]:
+            return False
+        env = open("/proc/%s/environ" % p, "rb").read().split(b"\0")
+        return ("PIPEWIRE_CONFIG_DIR=" + conf).encode() in env
+    except (OSError, IndexError):
+        return False
+if mode == "start":
+    s = start(pid)
+    if s is None: sys.exit(1)
+    print(s); sys.exit(0)
+want = sys.argv[4] if len(sys.argv) > 4 else ""
+if not want.isdigit(): sys.exit(1)
+if mode == "check":
+    sys.exit(0 if ours(pid, want) else 1)
+if mode == "kill":
+    try: fd = os.pidfd_open(int(pid))
+    except OSError: sys.exit(1)
+    try:
+        if not ours(pid, want): sys.exit(1)
+        signal.pidfd_send_signal(fd, signal.SIGTERM)
+    finally:
+        os.close(fd)
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
 running() {
     [ -f "$PIDFILE" ] || return 1
-    pid=$(cat "$PIDFILE")
-    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-    [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "pipewire" ] || return 1
-    kill -0 "$pid" 2>/dev/null
+    read -r pid start < "$PIDFILE" || true
+    proc_ctl check "${pid:-}" "${start:-}"
 }
 
 # Control ports live on the CAPTURE node, not the source node.
@@ -150,7 +196,10 @@ cmd_arm() {
 
     PIPEWIRE_CONFIG_DIR="$CONF_DIR" setsid pipewire -c filter-chain.conf \
         >"$LOG" 2>&1 &
-    echo $! > "$PIDFILE"
+    pid=$!
+    # Start time survives exec, so it can be recorded before pipewire is up.
+    start=$(proc_ctl start "$pid") || { rm -f "$PIDFILE"; die "the filter process exited immediately; see $LOG"; }
+    echo "$pid $start" > "$PIDFILE"
 
     i=0
     while [ $i -lt 30 ]; do
@@ -160,12 +209,15 @@ cmd_arm() {
             echo "armed - select \"TekVoice\" as your microphone"
             return 0
         fi
-        running || break
+        # Our own unreaped child, so kill -0 is safe here; full identity is
+        # checked once it has exec'd into pipewire.
+        kill -0 "$pid" 2>/dev/null || break
         sleep 0.1
         i=$((i + 1))
     done
     echo "tekvoice: failed to arm; log follows" >&2
     tail -5 "$LOG" >&2 2>/dev/null || true
+    proc_ctl kill "$pid" "$start" || true
     rm -f "$PIDFILE"
     exit 1
 }
@@ -177,7 +229,8 @@ cmd_disarm() {
     if [ "$n" -gt 0 ] && [ "$force" != "--force" ]; then
         die "$n application(s) are using TekVoice; use 'panic' to return your real voice, or 'disarm --force'"
     fi
-    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    read -r pid start < "$PIDFILE" || true
+    proc_ctl kill "${pid:-}" "${start:-}" || true
     rm -f "$PIDFILE"
     state_set armed no
     state_set mix 0

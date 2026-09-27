@@ -35,11 +35,19 @@ themselves.
   before anything is written. The control values go to `pw-cli` as numbers
   formatted by Python, never as text the user supplied.
 - **Strength** must match `^[0-9]+$` and be 100 or less.
-- **The pidfile** is trusted only if it holds digits only, and
-  `/proc/<pid>/comm` is `pipewire`. Otherwise the filter counts as not
-  running, and `disarm` kills nothing. There is no `/tmp` fallback: without
-  `XDG_RUNTIME_DIR` the CLI refuses to run. `tests/test_pidfile.sh` plants a
-  foreign pid and asserts it survives.
+- **The pidfile** holds the filter's pid *and* its kernel start time
+  (`/proc/<pid>/stat` field 22), recorded at `arm`. It is trusted only if the
+  live process still has that start time (a reused pid gets a new one), its
+  `comm` is `pipewire`, its command line is exactly `pipewire -c
+  filter-chain.conf`, and its environment carries TekVoice's private
+  `PIPEWIRE_CONFIG_DIR`. The user's own PipeWire daemon fails all of these.
+  Otherwise the filter counts as not running, and `disarm` kills nothing.
+  `disarm` opens a pidfd on the pid first, re-checks the identity, and then
+  signals through the pidfd, so the pid cannot be recycled between the check
+  and the kill. There is no `/tmp` fallback: without `XDG_RUNTIME_DIR` the CLI
+  refuses to run. `tests/test_pidfile.sh` plants a foreign process, a foreign
+  process named `pipewire`, and a stale start time, and asserts each survives
+  `disarm --force`; it also asserts the real filter identity is still stopped.
 
 ## What it never does
 
